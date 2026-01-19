@@ -70,24 +70,36 @@ DEFAULT_QUERY_TYPE = "general_awareness"
 DEFAULT_LAWYER_NEEDED = False
 
 # ------------------ HELPERS ------------------
+# ------------------ HELPERS ------------------
 def save_to_supabase(data: dict):
     if not supabase:
         print("Warning: Supabase not configured")
         return
     try:
-        supabase.table("user_queries").insert(data).execute()
-        print("✅ Data saved to Supabase")
+        # Remove 'timestamp' if present
+        data_to_save = data.copy()
+        data_to_save.pop("timestamp", None)
+
+        supabase.table("user_queries").insert(data_to_save).execute()
+        print("Data saved to Supabase successfully")
     except Exception as e:
         print(f"❌ Supabase save error: {e}")
 
+
 def update_supabase_record(session_id: str, updates: dict):
     if not supabase:
+        print("Warning: Supabase not configured")
         return
     try:
-        supabase.table("user_queries").update(updates).eq("session_id", session_id).execute()
+        # Remove 'timestamp' if present in updates
+        updates_to_save = updates.copy()
+        updates_to_save.pop("timestamp", None)
+
+        supabase.table("user_queries").update(updates_to_save).eq("session_id", session_id).execute()
         print("✅ Supabase record updated")
     except Exception as e:
         print(f"Supabase update error: {e}")
+
 
 def trigger_relay_workflow(url: str, data: dict) -> dict:
     if not url:
@@ -200,7 +212,6 @@ async def chat(request: ChatRequest):
             "session_id": session_id,
             "query_type": DEFAULT_QUERY_TYPE,
             "lawyer_needed": DEFAULT_LAWYER_NEEDED,
-            "timestamp": datetime.now().isoformat()
         })
 
         relay_response = trigger_relay_workflow(RELAY_WORKFLOW_URL, data)
