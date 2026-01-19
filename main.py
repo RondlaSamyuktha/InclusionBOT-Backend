@@ -213,33 +213,42 @@ async def chat(request: ChatRequest):
             "query_type": DEFAULT_QUERY_TYPE,
             "lawyer_needed": DEFAULT_LAWYER_NEEDED,
         })
-
+        
         # ---------------- Relay Workflow 1 ----------------
-        relay_response = trigger_relay_workflow(RELAY_WORKFLOW_URL, data)
-        if relay_response:
-            # Update data with classification from Relay
-            data["query_type"] = relay_response.get("query_type", DEFAULT_QUERY_TYPE)
-            data["lawyer_needed"] = relay_response.get("lawyer_needed", DEFAULT_LAWYER_NEEDED)
+relay_response_1 = trigger_relay_workflow(RELAY_WORKFLOW_URL, data)
+if relay_response_1:
+    # Update data with classification from Relay 1
+    data["query_type"] = relay_response_1.get("query_type", DEFAULT_QUERY_TYPE)
+    data["lawyer_needed"] = relay_response_1.get("lawyer_needed", DEFAULT_LAWYER_NEEDED)
 
-        # ---------------- Save to Supabase ----------------
-        save_to_supabase(data)
-        update_supabase_record(session_id, {
-            "query_type": data["query_type"],
-            "lawyer_needed": data["lawyer_needed"]
-        })
+# ---------------- Relay Workflow 2 ----------------
+relay_response_2 = trigger_relay_workflow(RELAY_WORKFLOW_URL_2, data)
+if relay_response_2:
+    # Example: Relay 2 might return additional info or confirmation
+    workflow_2_output = relay_response_2.get("workflow_result", "No additional info received")
+else:
+    workflow_2_output = "No additional info received"
 
-        # ---------------- Relay Workflow 2 ----------------
-        trigger_relay_workflow(RELAY_WORKFLOW_URL_2, data)
+# ---------------- Save to Supabase ----------------
+save_to_supabase(data)
+update_supabase_record(session_id, {
+    "query_type": data["query_type"],
+    "lawyer_needed": data["lawyer_needed"]
+})
 
-        # ---------------- Response to User ----------------
-        response_text = f"✅ Thank you! Your details have been submitted successfully.\n"
-        response_text += f"📌 Your query has been classified as: **{data['query_type']}**"
+# ---------------- Response to User ----------------
+response_text = (
+    "✅ Thank you! Your details have been submitted successfully.\n\n"
+    f"📌 Your query has been classified as: **{data['query_type']}**\n\n"
+    f"🔹 Additional info from Workflow 2: {workflow_2_output}"
+)
 
-        if data["lawyer_needed"]:
-            state["lawyer_consult_prompted"] = True
-            response_text += "\n⚖️ This appears to be a legal matter. Would you like to consult a lawyer? Please answer 'yes' or 'no'."
+if data["lawyer_needed"]:
+    state["lawyer_consult_prompted"] = True
+    response_text += "\n⚖️ This appears to be a legal matter. Would you like to consult a lawyer? Please answer 'yes' or 'no'."
 
-        return ChatResponse(response=response_text, session_id=session_id)
+return ChatResponse(response=response_text, session_id=session_id)
+
 
 
     except Exception as e:
