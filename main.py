@@ -214,25 +214,33 @@ async def chat(request: ChatRequest):
             "lawyer_needed": DEFAULT_LAWYER_NEEDED,
         })
 
+        # ---------------- Relay Workflow 1 ----------------
         relay_response = trigger_relay_workflow(RELAY_WORKFLOW_URL, data)
         if relay_response:
+            # Update data with classification from Relay
             data["query_type"] = relay_response.get("query_type", DEFAULT_QUERY_TYPE)
             data["lawyer_needed"] = relay_response.get("lawyer_needed", DEFAULT_LAWYER_NEEDED)
 
         # ---------------- Save to Supabase ----------------
         save_to_supabase(data)
-        update_supabase_record(session_id, {"query_type": data["query_type"], "lawyer_needed": data["lawyer_needed"]})
+        update_supabase_record(session_id, {
+            "query_type": data["query_type"],
+            "lawyer_needed": data["lawyer_needed"]
+        })
 
         # ---------------- Relay Workflow 2 ----------------
         trigger_relay_workflow(RELAY_WORKFLOW_URL_2, data)
 
-        # ---------------- Lawyer Consultation Prompt ----------------
-        response_text = "✅ Thank you! Your details have been submitted successfully."
+        # ---------------- Response to User ----------------
+        response_text = f"✅ Thank you! Your details have been submitted successfully.\n"
+        response_text += f"📌 Your query has been classified as: **{data['query_type']}**"
+
         if data["lawyer_needed"]:
             state["lawyer_consult_prompted"] = True
             response_text += "\n⚖️ This appears to be a legal matter. Would you like to consult a lawyer? Please answer 'yes' or 'no'."
 
         return ChatResponse(response=response_text, session_id=session_id)
+
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -241,6 +249,7 @@ async def chat(request: ChatRequest):
 from fastapi import Body
 
 class RelayRequest(BaseModel):
+    session_id: str               # Relay must send the session_id
     query_type: str
     lawyer_needed: str
 
@@ -248,20 +257,21 @@ class RelayRequest(BaseModel):
 async def relay_endpoint(data: RelayRequest):
     print("Received from Relay:", data)
 
-    # ✅ Convert string → boolean
+    # Convert string to boolean
     lawyer_bool = data.lawyer_needed.lower() in ["lawyer", "yes", "true", "1"]
 
-    insert_data = {
+    update_data = {
         "query_type": data.query_type,
         "lawyer_needed": lawyer_bool
     }
 
+    # Update the existing row for the given session_id
     if supabase:
-        supabase.table("user_queries").insert(insert_data).execute()
+        supabase.table("user_queries").update(update_data).eq("session_id", data.session_id).execute()
 
     return {
         "status": "success",
-        "received": insert_data
+        "received": update_data
     }
 
 
