@@ -237,6 +237,24 @@ async def chat(request: ChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ------------------ RELAY ENDPOINT ------------------
+from fastapi import Body
+
+class RelayRequest(BaseModel):
+    query_type: str
+    lawyer_needed: str
+
+@app.post("/relay")
+async def relay_endpoint(data: RelayRequest):
+    # Save or process data
+    print("Received from Relay:", data)
+    
+    # Example: save to Supabase
+    if supabase:
+        supabase.table("user_queries").insert(data.dict()).execute()
+    
+    return {"status": "success", "received": data.dict()}
+
 # ------------------ HEALTH CHECK ------------------
 @app.get("/health")
 async def health():
