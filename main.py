@@ -52,6 +52,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+@app.get("/")
+def root():
+    return {
+        "status": "InclusionBot backend running",
+        "health": "/health",
+        "chat": "/chat"
+    }
 
 
 # ------------------ MODELS ------------------
