@@ -1,0 +1,10 @@
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+pydantic>=2.7.0
+# Let supabase choose a compatible httpx version (it requires httpx>=0.24.0,<0.25.0)
+supabase>=2.0.0
+langchain>=0.2.16
+langchain-google-genai>=1.0.6
+langgraph>=0.2.34
+python-dotenv>=1.0.0
+python-multipart>=0.0.6
