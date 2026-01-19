@@ -246,14 +246,24 @@ class RelayRequest(BaseModel):
 
 @app.post("/relay")
 async def relay_endpoint(data: RelayRequest):
-    # Save or process data
     print("Received from Relay:", data)
-    
-    # Example: save to Supabase
+
+    # ✅ Convert string → boolean
+    lawyer_bool = data.lawyer_needed.lower() in ["lawyer", "yes", "true", "1"]
+
+    insert_data = {
+        "query_type": data.query_type,
+        "lawyer_needed": lawyer_bool
+    }
+
     if supabase:
-        supabase.table("user_queries").insert(data.dict()).execute()
-    
-    return {"status": "success", "received": data.dict()}
+        supabase.table("user_queries").insert(insert_data).execute()
+
+    return {
+        "status": "success",
+        "received": insert_data
+    }
+
 
 # ------------------ HEALTH CHECK ------------------
 @app.get("/health")
