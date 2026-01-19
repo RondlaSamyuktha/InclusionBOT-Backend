@@ -177,7 +177,6 @@ If all collected, return:
         print(f"LLM error: {e}")
         return "Sorry, I couldn’t understand that. Could you rephrase?"
 
-# ------------------ CHAT ENDPOINT ------------------
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     try:
@@ -198,6 +197,7 @@ async def chat(request: ChatRequest):
             else:
                 response_text = "⚖️ Please answer 'yes' or 'no' if you want to consult a lawyer."
                 return ChatResponse(response=response_text, session_id=session_id)
+
             state["lawyer_consult_prompted"] = False
             return ChatResponse(response=response_text, session_id=session_id)
 
@@ -213,46 +213,55 @@ async def chat(request: ChatRequest):
             "query_type": DEFAULT_QUERY_TYPE,
             "lawyer_needed": DEFAULT_LAWYER_NEEDED,
         })
-        
-        # ---------------- Relay Workflow 1 ----------------
-relay_response_1 = trigger_relay_workflow(RELAY_WORKFLOW_URL, data)
-if relay_response_1:
-    # Update data with classification from Relay 1
-    data["query_type"] = relay_response_1.get("query_type", DEFAULT_QUERY_TYPE)
-    data["lawyer_needed"] = relay_response_1.get("lawyer_needed", DEFAULT_LAWYER_NEEDED)
 
-# ---------------- Relay Workflow 2 ----------------
-relay_response_2 = trigger_relay_workflow(RELAY_WORKFLOW_URL_2, data)
-if relay_response_2:
-    # Example: Relay 2 might return additional info or confirmation
-    workflow_2_output = relay_response_2.get("workflow_result", "No additional info received")
-else:
-    workflow_2_output = "No additional info received"
+        relay_response_1 = trigger_relay_workflow(RELAY_WORKFLOW_URL, data)
+        if relay_response_1:
+            # Update data with classification from Relay 1
+            data["query_type"] = relay_response_1.get("query_type", DEFAULT_QUERY_TYPE)
+            data["lawyer_needed"] = relay_response_1.get("lawyer_needed", DEFAULT_LAWYER_NEEDED)
 
-# ---------------- Save to Supabase ----------------
-save_to_supabase(data)
-update_supabase_record(session_id, {
-    "query_type": data["query_type"],
-    "lawyer_needed": data["lawyer_needed"]
-})
+        # ---------------- Relay Workflow 2 ----------------
+        relay_response_2 = trigger_relay_workflow(RELAY_WORKFLOW_URL_2, data)
+        if relay_response_2:
+            laws = relay_response_2.get("laws", [])
+            action_plan = relay_response_2.get("action_plan", [])
+            workflow_2_output = ""
 
-# ---------------- Response to User ----------------
-response_text = (
-    "✅ Thank you! Your details have been submitted successfully.\n\n"
-    f"📌 Your query has been classified as: **{data['query_type']}**\n\n"
-    f"🔹 Additional info from Workflow 2: {workflow_2_output}"
-)
+            if laws:
+                workflow_2_output += "📜 **Top 5 Laws:**\n"
+                for i, law in enumerate(laws, 1):
+                    workflow_2_output += f"{i}. {law}\n"
 
-if data["lawyer_needed"]:
-    state["lawyer_consult_prompted"] = True
-    response_text += "\n⚖️ This appears to be a legal matter. Would you like to consult a lawyer? Please answer 'yes' or 'no'."
+            if action_plan:
+                workflow_2_output += "\n📝 **5-Step Action Plan:**\n"
+                for i, step in enumerate(action_plan, 1):
+                    workflow_2_output += f"{i}. {step}\n"
+        else:
+            workflow_2_output = "No additional info received"
 
-return ChatResponse(response=response_text, session_id=session_id)
+        # ---------------- Save to Supabase ----------------
+        save_to_supabase(data)
+        update_supabase_record(session_id, {
+            "query_type": data["query_type"],
+            "lawyer_needed": data["lawyer_needed"]
+        })
 
+        # ---------------- Response to User ----------------
+        response_text = (
+            "✅ Thank you! Your details have been submitted successfully.\n\n"
+            f"📌 Your query has been classified as: **{data['query_type']}**\n\n"
+            f"{workflow_2_output}"
+        )
 
+        if data["lawyer_needed"]:
+            state["lawyer_consult_prompted"] = True
+            response_text += "\n⚖️ This appears to be a legal matter. Would you like to consult a lawyer? Please answer 'yes' or 'no'."
+
+        return ChatResponse(response=response_text, session_id=session_id)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 # ------------------ RELAY ENDPOINT ------------------
 from fastapi import Body
